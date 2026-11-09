@@ -24,8 +24,8 @@
   "magpie": {
     "name": "LightVela",
     "summary": {
-      "en": "LightVela's OpenAI-compatible models: sign in with a phone number and an SMS code, or paste a session token. Plan, credits and expiry shown.",
-      "zh": "LightVela 的 OpenAI 兼容模型：手机验证码登录，或粘贴会话 token；显示套餐、积分与到期日。"
+      "en": "LightVela (China edition, lightvela.com): sign in with a phone number and an SMS code, or paste a session token. Plan, credits and expiry shown.",
+      "zh": "LightVela 国内版（lightvela.com）：手机验证码登录，或粘贴会话 token；显示套餐、积分与到期日。"
     },
     "icon": "https://raw.githubusercontent.com/ikashana/magpie-lightvela/main/assets/icon.png"
   },
