@@ -1,0 +1,12 @@
+{
+  "name": "@magpie-community/opencode-lightvela-auth",
+  "version": "0.1.0",
+  "description": "Sign in to a LightVela account and use its models from OpenCode or magpie",
+  "type": "module",
+  "main": "./opencode.mjs",
+  "exports": { ".": "./opencode2.mjs" },
+  "files": ["index.mjs", "opencode.mjs", "opencode2.mjs", "README.md", "README.zh.md"],
+  "keywords": ["opencode", "opencode-plugin", "magpie", "lightvela"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/ikashana/magpie-lightvela-auth.git" }
+}
