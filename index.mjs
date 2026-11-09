@@ -438,15 +438,13 @@ async function fromToken(token, log) {
   try {
     user = userOf(await call("/auth/session", { token: clean }))
   } catch {}
-  const out = {
+  return {
     type: "success",
     access: got.key,
     refresh: JSON.stringify({ token: clean, instanceId: got.instanceId, baseURL: got.baseURL, models: ids }),
     expires: 0,
     accountId: user?.name || user?.phone || "LightVela",
   }
-  log(`LightVela: token sign-in built ${JSON.stringify({ ...out, access: out.access.slice(0, 6) + "…" })}`)
-  return out
 }
 
 // ---------------------------------------------------------------------- plugin
