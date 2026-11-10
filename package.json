@@ -1,6 +1,6 @@
 {
   "name": "magpie-lightvela",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Sign in to a LightVela account and use its models from OpenCode or magpie",
   "type": "module",
   "main": "./opencode.mjs",
