@@ -199,6 +199,57 @@ async function readUsage(token) {
   }
 }
 
+// 当月的活跃日历：今天有没有算上、还差几天。
+async function readActivity(token) {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, "0")
+  const lastDay = new Date(y, now.getMonth() + 1, 0).getDate()
+  const today = `${y}-${m}-${String(now.getDate()).padStart(2, "0")}`
+  const payload = await call(`/v1/users/me/activity?start=${y}-${m}-01&end=${y}-${m}-${lastDay}`, { token })
+  const data = payload?.data ?? {}
+  const days = Array.isArray(data.days) ? data.days : []
+  const hit = days.find((x) => x && x.date === today)
+  return {
+    activeDays: Number(data.active_days) || 0,
+    requiredDays: Number(data.required_days) || 0,
+    todayActive: !!hit?.active,
+    today,
+  }
+}
+
+// 续期奖励：eligible 才领，领不到就把原因带回来（不抛错）。
+async function claimRenewal(token) {
+  const got = await call("/v1/passes/active-renewal/eligibility", { token })
+  const d = got?.data ?? {}
+  if (!d.eligible) {
+    return { claimed: false, reason: d.reason || "", activeDays: d.active_days, requiredDays: d.required_days, reward: d.reward }
+  }
+  if (d.claim_status && d.claim_status !== "unclaimed") {
+    return { claimed: false, reason: `already_${d.claim_status}` }
+  }
+  const res = await call("/v1/passes/active-renewal/claim", { method: "POST", token, body: {} })
+  return { claimed: true, reward: d.reward, data: res?.data ?? res }
+}
+
+// 一天的活跃 = 当天有过一次模型调用。发一条最短的消息把它点着，
+// 成本在 20 token 上下（1 积分 ≈ 10000 token）。
+async function sendPing(key, baseURL) {
+  const base = (baseURL || TOKEN_BASE).replace(/\/+$/, "")
+  const res = await fetch(`${base}/chat/completions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "auto", messages: [{ role: "user", content: "1" }], max_tokens: 1 }),
+    signal: AbortSignal.timeout(90_000),
+  })
+  if (!res.ok) {
+    const body = await res.text().catch(() => "")
+    throw new Error(`打卡请求失败（${res.status}）：${trim(body).slice(0, 160)}`)
+  }
+  await res.text().catch(() => "")
+  return true
+}
+
 // ------------------------------------------------------------------ sign-in page
 
 const esc = (s) =>
@@ -558,6 +609,50 @@ export async function LightVelaAuthPlugin({ client, magpie } = {}, options = {})
           }),
         },
       ],
+      // magpie 的每日打卡：当天没活跃就打一次点，顺手把到期的续期奖励领了。
+      // 平台的活跃按「当天有没有账号活动」记，读一次实例列表就够，不用发消息、
+      // 也不消耗积分。
+      async checkin(getAuth) {
+        const auth = await getAuth()
+        const meta = metaOf(auth)
+        if (!meta.token) {
+          return { outcome: "ineligible", message: "会话已过期，重新登录一次才能打卡" }
+        }
+        try {
+          let before = await readActivity(meta.token)
+          let pinged = false
+          if (!before.todayActive) {
+            // 当天还没有模型调用：发一条最短的消息把它点着
+            await sendPing(auth.access, meta.baseURL)
+            pinged = true
+            // 平台大约 8 秒后才把它记上，最多等 20 秒
+            for (let i = 0; i < 5; i++) {
+              await sleep(4000)
+              const a = await readActivity(meta.token).catch(() => null)
+              if (a?.todayActive) {
+                before = a
+                break
+              }
+            }
+          }
+          let renewal = null
+          try {
+            renewal = await claimRenewal(meta.token)
+          } catch (e) {
+            renewal = { claimed: false, reason: e.message }
+          }
+          const after = await readActivity(meta.token).catch(() => before)
+          const bits = []
+          if (renewal?.claimed) bits.push("已领取续期奖励")
+          if (pinged) bits.push("已发打卡消息")
+          bits.push(after.todayActive ? "今日活跃 ✓" : "今日活跃（待平台确认）")
+          if (after.requiredDays > 0) bits.push(`进度 ${after.activeDays}/${after.requiredDays}`)
+          if (renewal && !renewal.claimed && renewal.reason) bits.push(`续期：${renewal.reason}`)
+          return { outcome: "claimed", message: bits.join(" · ") }
+        } catch (e) {
+          return { outcome: "failed", message: e?.message ?? String(e) }
+        }
+      },
       async loader(getAuth) {
         const auth = await getAuth()
         if (!auth?.access) return {}
@@ -603,6 +698,8 @@ export const _internal = {
   pickInstance,
   listModels,
   readUsage,
+  readActivity,
+  claimRenewal,
   page,
   metaOf,
   modelEntry,
